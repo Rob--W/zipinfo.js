@@ -1,0 +1,19 @@
+{
+  "name": "zipinfo.js",
+  "version": "0.0.1",
+  "description": "A minimal JavaScript library for querying metadata of zip files.",
+  "main": "zipinfo.js",
+  "keywords": [
+    "zip"
+  ],
+  "author": "Rob Wu <rob@robwu.nl> (https://robwu.nl)",
+  "license": "MIT",
+  "devDependencies": {
+    "istanbul": "^0.4.5",
+    "mocha": "^3.2.0"
+  },
+  "scripts": {
+    "test": "mocha ./test/test*.js --reporter spec",
+    "test-coverage": "istanbul cover ./node_modules/.bin/_mocha -- test/test-ZipInfo.js --reporter spec"
+  }
+}

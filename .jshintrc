@@ -1,0 +1,5 @@
+{
+    "strict": "global",
+    "undef": true,
+    "unused": "vars"
+}
