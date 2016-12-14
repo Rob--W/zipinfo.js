@@ -17,8 +17,7 @@ ZipInfo.getRemoteEntries = function(url, onGotEntries) {
               return headers.slice(i + headerName.length).split('\r\n')[0];
             }
           });
-        }
-        if (response.readyState === 4) {
+        } else if (response.readyState === 4) {
           onCompleted(new Uint8Array(response.response || 0));
         }
       },
