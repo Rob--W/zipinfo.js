@@ -10,9 +10,13 @@
   "license": "MIT",
   "devDependencies": {
     "istanbul": "^0.4.5",
-    "mocha": "^3.2.0"
+    "mocha": "^3.2.0",
+    "uglify-js2": "^2.1.11"
   },
   "scripts": {
+    "build-min": "npm run build-min-browser && npm run build-min-greasemonkey",
+    "build-min-browser": "uglifyjs zipinfo.js zipinfo_browser.js -m -c --comments /Copyright/ -o build/zipinfo_browser.min.js",
+    "build-min-greasemonkey": "uglifyjs zipinfo.js zipinfo_greasemonkey.js -m -c --comments /Copyright/ -o build/zipinfo_greasemonkey.min.js",
     "test": "mocha ./test/test*.js --reporter spec",
     "test-coverage": "istanbul cover ./node_modules/.bin/_mocha -- test/test-ZipInfo.js --reporter spec"
   }
