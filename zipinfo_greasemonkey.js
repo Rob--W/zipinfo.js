@@ -1,43 +1,37 @@
 /* globals ZipInfo, GM_xmlhttpRequest, Uint8Array */
-/* jshint esversion: 6 */
 'use strict';
 
 ZipInfo.getRemoteEntries = function(url, onGotEntries) {
-  let sendHttpRequest = ({
-    rangeHeader,
-    onHeadersReceived,
-    onCompleted,
-  }) => {
-    let onreadystatechange;
-    if (onHeadersReceived) {
-      onreadystatechange = ({responseHeaders, readyState}) => {
-        if (readyState === 2) {
-          onHeadersReceived((headerName) => {
+  function sendHttpRequest(params) {
+    var onCompleted = params.onCompleted;
+    var x = GM_xmlhttpRequest({
+      responseType: 'arraybuffer',
+      headers: params.rangeHeader ? {Range: params.rangeHeader} : {},
+      onreadystatechange: function(response) {
+        if (response.readyState === 2 && params.onHeadersReceived) {
+          var headers = response.responseHeaders;
+          params.onHeadersReceived(function(headerName) {
             headerName = headerName.toLowerCase() + ': ';
-            let i = responseHeaders.toLowerCase().indexOf(headerName);
+            var i = headers.toLowerCase().indexOf(headerName);
             if (i >= 0) {
-              let end = responseHeaders.indexOf('\r\n', i + headerName.length);
-              end = end === -1 ? responseHeaders.length : end;
-              return responseHeaders.slice(i, end);
+              var end = headers.indexOf('\r\n', i + headerName.length);
+              end = end === -1 ? headers.length : end;
+              return headers.slice(i, end);
             }
           });
         }
-      };
-    }
-    let {abort} = GM_xmlhttpRequest({
-      responseType: 'arraybuffer',
-      headers: rangeHeader ? {Range: rangeHeader} : {},
-      onreadystatechange,
-      onload: ({response}) => onCompleted(new Uint8Array(response)),
-      onerror: () => onCompleted(new Uint8Array()),
-      url,
+        if (response.readyState === 4) {
+          onCompleted(new Uint8Array(response.response || 0));
+        }
+      },
+      url: url,
     });
     return {
-      abort() {
-        onCompleted = () => {};
-        abort();
-      }
+      abort: function() {
+        onCompleted = function() {};
+        x.abort();
+      },
     };
-  };
+  }
   ZipInfo.runGetEntriesOverHttp(sendHttpRequest, onGotEntries);
 };
