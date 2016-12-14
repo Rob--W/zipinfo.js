@@ -50,6 +50,8 @@ All ites in the list have the following properties:
 - filename - string - the name of the entry (e.g. "dir/file.txt").
 - uncompressedSize - number - the size of the entry in the zip file.
 
+The list has exactly one element if the data is not a zip archive.
+
 ### ZipInfo.runGetEntriesOverHttp
 Querying the list of files in a zip file requires only a small part of the zip
 file. This method implements the logic as described by the section
