@@ -9,14 +9,12 @@ ZipInfo.getRemoteEntries = function(url, onGotEntries) {
       headers: params.rangeHeader ? {Range: params.rangeHeader} : {},
       onreadystatechange: function(response) {
         if (response.readyState === 2 && params.onHeadersReceived) {
-          var headers = response.responseHeaders;
+          var headers = '\r\n' + response.responseHeaders;
           params.onHeadersReceived(function(headerName) {
-            headerName = headerName.toLowerCase() + ': ';
+            headerName = '\r\n' + headerName.toLowerCase() + ': ';
             var i = headers.toLowerCase().indexOf(headerName);
             if (i >= 0) {
-              var end = headers.indexOf('\r\n', i + headerName.length);
-              end = end === -1 ? headers.length : end;
-              return headers.slice(i, end);
+              return headers.slice(i + headerName.length).split('\r\n')[0];
             }
           });
         }
