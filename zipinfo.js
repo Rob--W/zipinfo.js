@@ -1,4 +1,4 @@
-/* globals DataView, TextDecoder, Buffer, module, Uint8Array, XMLHttpRequest */
+/* globals DataView, TextDecoder, Buffer, module */
 'use strict';
 var ZipInfo = typeof module === 'object' && module.exports || {};
 
@@ -103,48 +103,69 @@ ZipInfo._decodeFilename = function(filename, utfLabel) {
   return new Buffer(filename).toString(utfLabel);  // Node.js
 };
 
-ZipInfo.getRemoteEntries = function(url, onGotEntries) {
-  var start = 0;  // Set when range requests are supported and desired.
-  var length = 0;
-  function requestRange(callback) {
-    // Using XHR because fetch doesn't support abort.
-    var x = new XMLHttpRequest();
-    x.open('GET', url);
-    x.responseType = 'arraybuffer';
+/**
+ * Fetches the list of files in a zip file using the HTTP protocol (http/https).
+ *
+ * @param {function} sendHttpRequest - The method to fetch the initial data.
+ *  This callback is passed an object with the following properties:
+ *  - rangeHeader - An optional string. If not falsey, the "Range" request
+ *    header must be set on the request with this value.
+ *  - onHeadersReceived - This method should be called when the headers become
+ *    available. Calling this is recommended but not required. The callback
+ *    should be passed a function that returns a header for a given header name,
+ *    or a falsey value if the header is unavailable.
+ *  - onCompleted - This method must be called when the request finishes, UNLESS
+ *    the request is explicitly aborted. The callback should be called with a
+ *    Uint8Array of the response (which may be empty if an error has occurred).
+ *  The method must return an object with the "abort" method, which cancels the
+ *  initial request.
+ * @param {function} onGotEntries - Called when all request finish. The method
+ *  is called with a single argument, the return value of ZipInfo.getEntries.
+ */
+ZipInfo.runGetEntriesOverHttp = function(sendHttpRequest, onGotEntries) {
+  function getRange(start, length) {
+    // We are expecting a response at the end of a zip file. Do not set the
+    // range header if the start is 0 in case the server has a buggy range
+    // request implementation.
     if (start) {
-      x.setRequestHeader('Range',
-        'bytes=' + start + '-' + (length - 1) + '/' + length);
+      return 'bytes=' + start + '-' + (length - 1) + '/' + length;
     }
-    x.onloadend = function() {
-      var res = this.response;
-      if (start && res && res.byteLength === length) {
-        start = 0;  // Server does not seem to support byte range requests.
-      }
-      callback(ZipInfo.getEntries(new Uint8Array(res || 0), start));
-    };
-    x.send();
-    return x;
   }
 
-  var x = requestRange(onGotEntries);
-  x.onreadystatechange = function() {
-    if (this.readyState === 2) {
-      length = parseInt(this.getResponseHeader('Content-Length'), 10) || 0;
+  var x = sendHttpRequest({
+    onHeadersReceived: function(getResponseHeader) {
+      var length = parseInt(getResponseHeader('Content-Length'), 10) || 0;
       // 100k is an arbitrary threshold above the maximum EOCD record size.
-      if (length > 1e5 && this.getResponseHeader('Accept-Ranges') === 'bytes') {
-        this.onreadystatechange = this.onloadend = null;
-        this.abort();
-        // The EOCD record size is at most 0xFFFF + 22. -1 for range request.
-        start = length - 0xFFFF - 23;
-        requestRange(function(entries) {
+      if (length < 1e5 || getResponseHeader('Accept-Ranges') !== 'bytes') {
+        return;
+      }
+      // Switch to range requests.
+      x.abort();
+      // The EOCD record size is at most 0xFFFF + 22. -1 for range request.
+      var start = length - 0xFFFF - 23;
+      sendHttpRequest({
+        rangeHeader: getRange(start, length),
+        onCompleted: function(response) {
+          if (start && response.byteLength === length) {
+            start = 0;  // Server does not seem to support range requests.
+          }
+          var entries = ZipInfo.getEntries(response);
           if (entries[0].centralDirectoryStart >= start) {
             onGotEntries(entries);
-            return;
+          } else {
+            start = entries[0].centralDirectoryStart;
+            sendHttpRequest({
+              rangeHeader: getRange(start, length),
+              onCompleted: function(response) {
+                onGotEntries(ZipInfo.getEntries(response));
+              },
+            });
           }
-          start = entries[0].centralDirectoryStart;
-          requestRange(onGotEntries);
-        });
-      }
-    }
-  };
+        },
+      });
+    },
+    onCompleted: function(response) {
+      onGotEntries(ZipInfo.getEntries(response));
+    },
+  });
 };

@@ -244,3 +244,311 @@ describe('ZipInfo.getEntries', function() {
     assert.equal(callCount, 1, 'Expected TextDecoder.decode to be called once');
   });
 });
+
+describe('ZipInfo.runGetEntriesOverHttp', function() {
+  // The minimum file size in order to switch to range requests.
+  var MIN_SIZE_FOR_RANGE_REQUESTS = 100000;
+
+  // The following depends on the content from testdata/7z-utf8.zip.
+  var TEST_CD_START = 34;
+
+  function getTestZipAsUint8Array(desiredFileSize) {
+    var data = readFileAsUint8Array('testdata/7z-utf8.zip');
+    assert.ok(desiredFileSize >= data.length, 'Actual size (' + data.length +
+      ' must fit in the desired size (' + desiredFileSize + ')');
+
+    var result = new Uint8Array(desiredFileSize);
+    // Our test zip file's EOCD record has no comment, so its size is 22.
+    var eocdStart = data.length - 22;
+    var zipStart = data.subarray(0, eocdStart);
+    var zipEnd = data.subarray(eocdStart, data.length);
+
+    // Sanity check:
+    assert.strictEqual(
+      new DataView(data.buffer).getUint32(eocdStart, true),
+      0x06054b50);
+
+    result.set(zipStart, 0);
+    result.set(zipEnd, result.length - zipEnd.length);
+    return result;
+  }
+  function getExpectedEntries() {
+    // Expectation for testdata/7z-utf8.zip.
+    // The actual entries are not interesting, we are merely testing whether the
+    // HTTP protocol works as expected.
+    return [{
+      directory: true,
+      filename: '/',
+      uncompressedSize: 0,
+      centralDirectoryStart: 34,
+    }, {
+      directory: false,
+      filename: '\ud83d\udca9',
+      uncompressedSize: 0,
+    }];
+  }
+  function createFakeRequestHandler(handlers) {
+    var abortCount = 0;
+    var requestCount = 0;
+    return {
+      sendRequest: function(params) {
+        process.nextTick(function() {
+          var handler = handlers[requestCount++];
+          assert.ok(handler, 'Did not expect request number ' + requestCount);
+          handler(params);
+        });
+        return {
+          abort: function() {
+            ++abortCount;
+          },
+        };
+      },
+      get abortCount() {
+        return abortCount;
+      },
+      get requestCount() {
+        return requestCount;
+      },
+    };
+  }
+
+  it('should work if server does not support range requests', function(done) {
+    var requestHandlers = createFakeRequestHandler([
+      function firstRequest(params) {
+        assert.strictEqual(requestHandlers.abortCount, 0,
+          'Request should not be aborted');
+        assert.ok(!params.rangeHeader, 'No range header at first request');
+        params.onHeadersReceived(function(headerName) {
+          if (headerName === 'Content-Length') {
+            return String(MIN_SIZE_FOR_RANGE_REQUESTS);
+          }
+          if (headerName === 'Accept-Ranges') {
+            return null;
+          }
+          assert.ok(false, 'Unexpected header: ' + headerName);
+        });
+        assert.strictEqual(requestHandlers.abortCount, 0,
+          'Request should not be aborted');
+        params.onCompleted(getTestZipAsUint8Array(MIN_SIZE_FOR_RANGE_REQUESTS));
+      },
+      function lastRequest() {
+        assert.ok(false, 'No second request because the first response does ' + 
+          'not reply with Accept-Ranges: bytes.');
+      },
+    ]);
+    ZipInfo.runGetEntriesOverHttp(function(params) {
+      return requestHandlers.sendRequest(params);
+    }, function(entries) {
+      assert.strictEqual(requestHandlers.abortCount, 0, 'abort count');
+      assert.strictEqual(requestHandlers.requestCount, 1, 'request count');
+      assertEntriesEq(entries, getExpectedEntries());
+      done();
+    });
+  });
+
+  it('should send 1 request if the file is small', function(done) {
+    var requestHandlers = createFakeRequestHandler([
+      function firstRequest(params) {
+        assert.strictEqual(requestHandlers.abortCount, 0,
+          'Request should not be aborted');
+        assert.ok(!params.rangeHeader, 'No range header at first request');
+        params.onHeadersReceived(function(headerName) {
+          if (headerName === 'Content-Length') {
+            return String(MIN_SIZE_FOR_RANGE_REQUESTS - 1);
+          }
+          if (headerName === 'Accept-Ranges') {
+            return 'bytes';
+          }
+          assert.ok(false, 'Unexpected header: ' + headerName);
+        });
+        assert.strictEqual(requestHandlers.abortCount, 0,
+          'Request should not be aborted');
+        params.onCompleted(getTestZipAsUint8Array(MIN_SIZE_FOR_RANGE_REQUESTS - 1));
+      },
+      function lastRequest() {
+        assert.ok(false, 'No second request because the first response does ' + 
+          'not contain enough bytes (via Content-Length).');
+      },
+    ]);
+    ZipInfo.runGetEntriesOverHttp(function(params) {
+      return requestHandlers.sendRequest(params);
+    }, function(entries) {
+      assert.strictEqual(requestHandlers.abortCount, 0, 'abort count');
+      assert.strictEqual(requestHandlers.requestCount, 1, 'request count');
+      assertEntriesEq(entries, getExpectedEntries());
+      done();
+    });
+  });
+
+  it('should send 1 request if the size is unknown', function(done) {
+    var requestHandlers = createFakeRequestHandler([
+      function firstRequest(params) {
+        assert.strictEqual(requestHandlers.abortCount, 0,
+          'Request should not be aborted');
+        assert.ok(!params.rangeHeader, 'No range header at first request');
+        params.onHeadersReceived(function(headerName) {
+          if (headerName === 'Content-Length') {
+            return null;
+          }
+          if (headerName === 'Accept-Ranges') {
+            return 'bytes';
+          }
+          assert.ok(false, 'Unexpected header: ' + headerName);
+        });
+        assert.strictEqual(requestHandlers.abortCount, 0,
+          'Request should not be aborted');
+        params.onCompleted(getTestZipAsUint8Array(MIN_SIZE_FOR_RANGE_REQUESTS));
+      },
+      function lastRequest() {
+        assert.ok(false, 'No second request because of missing Content-Length'); 
+      },
+    ]);
+    ZipInfo.runGetEntriesOverHttp(function(params) {
+      return requestHandlers.sendRequest(params);
+    }, function(entries) {
+      assert.strictEqual(requestHandlers.abortCount, 0, 'abort count');
+      assert.strictEqual(requestHandlers.requestCount, 1, 'request count');
+      assertEntriesEq(entries, getExpectedEntries());
+      done();
+    });
+  });
+
+  it('should fetch entries with range requests', function(done) {
+    var requestHandlers = createFakeRequestHandler([
+      function firstRequest(params) {
+        assert.strictEqual(requestHandlers.abortCount, 0,
+          'Request should not be aborted');
+        assert.ok(!params.rangeHeader, 'No range header at first request');
+        params.onHeadersReceived(function(headerName) {
+          if (headerName === 'Content-Length') {
+            return String(MIN_SIZE_FOR_RANGE_REQUESTS);
+          }
+          if (headerName === 'Accept-Ranges') {
+            return 'bytes';
+          }
+          assert.ok(false, 'Unexpected header: ' + headerName);
+        });
+        assert.strictEqual(requestHandlers.abortCount, 1,
+          'Request should be aborted');
+      },
+      function requestWithRange(params) {
+        assert.equal(params.rangeHeader, 'bytes=34442-99999/100000',
+          'Expected Range header');
+        // This is not needed, but let's test for it in case the implementation
+        // changes and we have to revisit the test to check if onHeadersReceived
+        // should be called.
+        assert.ok(!params.onHeadersReceived, 'Does not care about headers');
+        params.onCompleted(getTestZipAsUint8Array(MIN_SIZE_FOR_RANGE_REQUESTS));
+      },
+      function lastRequest() {
+        assert.ok(false, 'No third request because the second response ' + 
+          'contained a full zip file.');
+      },
+    ]);
+    ZipInfo.runGetEntriesOverHttp(function(params) {
+      return requestHandlers.sendRequest(params);
+    }, function(entries) {
+      assert.strictEqual(requestHandlers.abortCount, 1, 'abort count');
+      assert.strictEqual(requestHandlers.requestCount, 2, 'request count');
+      assertEntriesEq(entries, getExpectedEntries());
+      done();
+    });
+  });
+
+  it('should fetch more data if content is missing', function(done) {
+    var requestHandlers = createFakeRequestHandler([
+      function firstRequest(params) {
+        assert.strictEqual(requestHandlers.abortCount, 0,
+          'Request should not be aborted');
+        assert.ok(!params.rangeHeader, 'No range header at first request');
+        params.onHeadersReceived(function(headerName) {
+          if (headerName === 'Content-Length') {
+            return String(MIN_SIZE_FOR_RANGE_REQUESTS);
+          }
+          if (headerName === 'Accept-Ranges') {
+            return 'bytes';
+          }
+          assert.ok(false, 'Unexpected header: ' + headerName);
+        });
+        assert.strictEqual(requestHandlers.abortCount, 1,
+          'Request should be aborted');
+      },
+      function requestWithRange(params) {
+        // Chosen by ZipInfo.getEntries.
+        var rangeStart = 34442;
+        assert.equal(params.rangeHeader, 'bytes=' + rangeStart + '-99999/100000',
+          'Expected Range header');
+        // This is not needed, but let's test for it in case the implementation
+        // changes and we have to revisit the test to check if onHeadersReceived
+        // should be called.
+        assert.ok(!params.onHeadersReceived, 'Does not care about headers');
+        // +1 = one position past the central directory.
+        params.onCompleted(
+          getTestZipAsUint8Array(MIN_SIZE_FOR_RANGE_REQUESTS).subarray(
+            rangeStart + TEST_CD_START + 1));
+      },
+      function thirdRequest(params) {
+        // Choosen by ZipInfo.getEntries, based on the zip file's content.
+        var rangeStart = TEST_CD_START;
+        assert.equal(params.rangeHeader,
+          'bytes=' + rangeStart + '-99999/100000', 'Expected Range header');
+        assert.ok(!params.onHeadersReceived, 'Does not care about headers');
+        params.onCompleted(getTestZipAsUint8Array(MIN_SIZE_FOR_RANGE_REQUESTS));
+      },
+      function lastRequest() {
+        assert.ok(false, 'No fourth request because the third response ' + 
+          'contained a full zip file.');
+      },
+    ]);
+    ZipInfo.runGetEntriesOverHttp(function(params) {
+      return requestHandlers.sendRequest(params);
+    }, function(entries) {
+      assert.strictEqual(requestHandlers.abortCount, 1, 'abort count');
+      assert.strictEqual(requestHandlers.requestCount, 3, 'request count');
+      assertEntriesEq(entries, getExpectedEntries());
+      done();
+    });
+  });
+
+  it('should recover if range support is erroneously reported', function(done) {
+    var requestHandlers = createFakeRequestHandler([
+      function firstRequest(params) {
+        assert.strictEqual(requestHandlers.abortCount, 0,
+          'Request should not be aborted');
+        assert.ok(!params.rangeHeader, 'No range header at first request');
+        params.onHeadersReceived(function(headerName) {
+          if (headerName === 'Content-Length') {
+            return String(MIN_SIZE_FOR_RANGE_REQUESTS);
+          }
+          if (headerName === 'Accept-Ranges') {
+            return 'bytes';
+          }
+          assert.ok(false, 'Unexpected header: ' + headerName);
+        });
+        assert.strictEqual(requestHandlers.abortCount, 1,
+          'Request should be aborted');
+      },
+      function requestWithRange(params) {
+        // Server misbehaves and does not have a valid reply.
+        params.onCompleted(new Uint8Array(0));
+      },
+      function thirdRequest(params) {
+        assert.ok(!params.rangeHeader, 'No range header after failed request');
+        assert.ok(!params.onHeadersReceived, 'Does not care about headers');
+        params.onCompleted(getTestZipAsUint8Array(MIN_SIZE_FOR_RANGE_REQUESTS));
+      },
+      function lastRequest() {
+        assert.ok(false, 'No fourth request because the third response ' + 
+          'contained a full zip file.');
+      },
+    ]);
+    ZipInfo.runGetEntriesOverHttp(function(params) {
+      return requestHandlers.sendRequest(params);
+    }, function(entries) {
+      assert.strictEqual(requestHandlers.abortCount, 1, 'abort count');
+      assert.strictEqual(requestHandlers.requestCount, 3, 'request count');
+      assertEntriesEq(entries, getExpectedEntries());
+      done();
+    });
+  });
+});

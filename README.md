@@ -50,6 +50,34 @@ All ites in the list have the following properties:
 - filename - string - the name of the entry (e.g. "dir/file.txt").
 - uncompressedSize - number - the size of the entry in the zip file.
 
+### ZipInfo.runGetEntriesOverHttp
+Querying the list of files in a zip file requires only a small part of the zip
+file. This method implements the logic as described by the section
+ "Optimization: minimize fetch" (below). See the JSDoc comment in the source
+code for documentation.
+
+There are three examples that uses `ZipInfo.runGetEntriesOverHttp` to fetch the
+actual file in an optimized way:
+
+- `zipinfo_browser.js` - exports `ZipInfo.getRemoteEntries` (see below) for
+  browser environments.
+- `zipinfo_greasemonkey.js` - exports `ZipInfo.getRemoteEntries` (see below)
+  for GreaseMonkey scripts.
+- `test-ZipInfo.js`, the whole test containing `ZipInfo.runGetEntriesOverHttp`.
+  This unit test shows the expected behavior of `ZipInfo.runGetEntriesOverHttp`.
+
+Typically you do not want to use this method directly, but include
+`zipinfo_browser.js` after `zipinfo.js` and then use `zipinfo.getRemoteEntries`.
+
+### ZipInfo.getRemoteEntries
+This method is only available after loading `zipinfo_browser.js` (for browsers)
+or `zipinfo_greasemonkey.js` (for cross-origin access in GreaseMonkey scripts).
+
+The method takes two parameters: The URL (string) that provides the zip file,
+and a callback that will be called with the result of `ZipInfo.getEntries`
+(even if the response is invalid).
+
+
 ## Example
 
 See `test/test-ZipInfo.js` for some examples in Node.js.
@@ -94,3 +122,6 @@ then you can use the following method to list the contents of the zip file:
 7. Otherwise, too little data was requested and you should repeat step 4 and 5
    with the start offset set to the value of the "centralDirectoryStart" key,
    and unconditionally return the entries.
+
+This logic is implemented as `ZipInfo.runGetEntriesOverHttp` in an
+environment-independent way. See the documentation of this method for more info.
