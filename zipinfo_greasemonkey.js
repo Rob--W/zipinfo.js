@@ -11,17 +11,15 @@ ZipInfo.getRemoteEntries = function(url, onGotEntries) {
     let onreadystatechange;
     if (onHeadersReceived) {
       onreadystatechange = ({responseHeaders, readyState}) => {
-        if (readyState === 2 && onHeadersReceived) {
+        if (readyState === 2) {
           onHeadersReceived((headerName) => {
             headerName = headerName.toLowerCase() + ': ';
             let i = responseHeaders.toLowerCase().indexOf(headerName);
             if (i >= 0) {
-              let end = responseHeaders.indexOf(
-                '\r\n', i + headerName.length);
+              let end = responseHeaders.indexOf('\r\n', i + headerName.length);
               end = end === -1 ? responseHeaders.length : end;
               return responseHeaders.slice(i, end);
             }
-            return '';
           });
         }
       };
