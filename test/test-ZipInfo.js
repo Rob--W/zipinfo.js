@@ -493,7 +493,9 @@ describe('ZipInfo.runGetEntriesOverHttp', function() {
         assert.equal(params.rangeHeader,
           'bytes=' + rangeStart + '-99999/100000', 'Expected Range header');
         assert.ok(!params.onHeadersReceived, 'Does not care about headers');
-        params.onCompleted(getTestZipAsUint8Array(MIN_SIZE_FOR_RANGE_REQUESTS));
+        params.onCompleted(
+          getTestZipAsUint8Array(MIN_SIZE_FOR_RANGE_REQUESTS).subarray(
+            rangeStart));
       },
       function lastRequest() {
         assert.ok(false, 'No fourth request because the third response ' + 

@@ -149,7 +149,7 @@ ZipInfo.runGetEntriesOverHttp = function(sendHttpRequest, onGotEntries) {
           if (start && response.byteLength === length) {
             start = 0;  // Server does not seem to support range requests.
           }
-          var entries = ZipInfo.getEntries(response);
+          var entries = ZipInfo.getEntries(response, start);
           if (entries[0].centralDirectoryStart >= start) {
             onGotEntries(entries);
           } else {
@@ -157,7 +157,7 @@ ZipInfo.runGetEntriesOverHttp = function(sendHttpRequest, onGotEntries) {
             sendHttpRequest({
               rangeHeader: getRange(start, length),
               onCompleted: function(response) {
-                onGotEntries(ZipInfo.getEntries(response));
+                onGotEntries(ZipInfo.getEntries(response, start));
               },
             });
           }
