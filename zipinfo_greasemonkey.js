@@ -10,12 +10,10 @@ ZipInfo.getRemoteEntries = function(url, onGotEntries) {
       onreadystatechange: function(response) {
         if (response.readyState === 2 && params.onHeadersReceived) {
           var headers = '\r\n' + response.responseHeaders;
-          params.onHeadersReceived(function(headerName) {
-            headerName = '\r\n' + headerName.toLowerCase() + ': ';
-            var i = headers.toLowerCase().indexOf(headerName);
-            if (i >= 0) {
-              return headers.slice(i + headerName.length).split('\r\n')[0];
-            }
+          params.onHeadersReceived(function(header) {
+            header = '\r\n' + header.toLowerCase() + ': ';
+            var i = headers.toLowerCase().indexOf(header);
+            return i >= 0 && headers.slice(i + header.length).split('\r\n')[0];
           });
         } else if (response.readyState === 4) {
           onCompleted(new Uint8Array(response.response || 0));
