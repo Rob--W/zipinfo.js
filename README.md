@@ -66,12 +66,14 @@ actual file in an optimized way:
 - `test-ZipInfo.js`, the whole test containing `ZipInfo.runGetEntriesOverHttp`.
   This unit test shows the expected behavior of `ZipInfo.runGetEntriesOverHttp`.
 
-Typically you do not want to use this method directly, but include
-`zipinfo_browser.js` after `zipinfo.js` and then use `zipinfo.getRemoteEntries`.
+Typically you do not want to use this method directly, but use
+`ZipInfo.getRemoteEntries`.
 
 ### ZipInfo.getRemoteEntries
 This method is only available after loading `zipinfo_browser.js` (for browsers)
 or `zipinfo_greasemonkey.js` (for cross-origin access in GreaseMonkey scripts).
+This functionality is included in the minified library at
+`build/zipinfo_browser.min.js` and `build/zipinfo_greasemonkey.min.js`.
 
 The method takes two parameters: The URL (string) that provides the zip file,
 and a callback that will be called with the result of `ZipInfo.getEntries`
