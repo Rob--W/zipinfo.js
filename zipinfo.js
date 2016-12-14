@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2016 Rob Wu <rob@robwu.nl> (https://robwu.nl)
+ * Published under a MIT license.
+ * https://github.com/Rob--W/zipinfo.js
+ **/
 /* globals DataView, TextDecoder, Buffer, module */
 'use strict';
 var ZipInfo = typeof module === 'object' && module.exports || {};

@@ -125,3 +125,9 @@ then you can use the following method to list the contents of the zip file:
 
 This logic is implemented as `ZipInfo.runGetEntriesOverHttp` in an
 environment-independent way. See the documentation of this method for more info.
+
+
+## License
+Copyright (c) 2016 Rob Wu <rob@robwu.nl> (https://robwu.nl)
+Published under a MIT license.
+https://github.com/Rob--W/zipinfo.js
