@@ -81,6 +81,12 @@ The method takes two parameters: The URL (string) that provides the zip file,
 and a callback that will be called with the result of `ZipInfo.getEntries`
 (even if the response is invalid).
 
+Note: The GreaseMonkey version does not appear to support cookies cross-origin,
+and [headers are not available until the request fully completes]
+(https://github.com/greasemonkey/greasemonkey/issues/2460), so in GreaseMonkey
+the library is not as efficient as it could be. It will probably work fine in
+TamperMonkey though.
+
 
 ## Example
 
