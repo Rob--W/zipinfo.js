@@ -19,5 +19,9 @@
     "build-min-greasemonkey": "uglifyjs zipinfo.js zipinfo_greasemonkey.js -m -c --comments /Copyright/ -o build/zipinfo_greasemonkey.min.js",
     "test": "mocha ./test/test*.js --reporter spec",
     "test-coverage": "istanbul cover ./node_modules/.bin/_mocha -- test/test-ZipInfo.js --reporter spec"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Rob--W/zipinfo.js.git"
   }
 }
