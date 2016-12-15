@@ -7,7 +7,7 @@ ZipInfo.getRemoteEntries = function(url, onGotEntries) {
     x.open('GET', url);
     x.responseType = 'arraybuffer';
     if (params.rangeHeader) {
-      params.setRequestHeader('Range', params.rangeHeader);
+      x.setRequestHeader('Range', params.rangeHeader);
     }
     x.onreadystatechange = params.onHeadersReceived && function() {
       if (x.readyState === 2) {
