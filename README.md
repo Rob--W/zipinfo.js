@@ -108,6 +108,19 @@ fetch('test/testdata/zip-all.zip').then(function(response) {
 </script>
 ```
 
+Here is another example, using the `ZipInfo.getRemoteEntries` method:
+
+```html
+<script src="zipinfo.js"></script>
+<script src="zipinfo_browser.js"></script>
+<!-- Or use build/zipinfo_browser.min.js instead of the above two. -->
+<script>
+ZipInfo.getRemoteEntries('test/testdata/zip-all.zip', function(entries) {
+  console.log(entries); // List of file names, sizes, ... in the zip file.
+});
+</script>
+```
+
 ## Optimization: minimize fetch
 
 If your zip files are often large, and the server supports byte range requests,
