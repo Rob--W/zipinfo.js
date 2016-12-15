@@ -1,6 +1,6 @@
 {
   "name": "zipinfo.js",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "A minimal JavaScript library for querying metadata of zip files.",
   "main": "zipinfo.js",
   "keywords": [
