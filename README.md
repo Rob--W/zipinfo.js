@@ -138,6 +138,6 @@ environment-independent way. See the documentation of this method for more info.
 
 
 ## License
-Copyright (c) 2016 Rob Wu <rob@robwu.nl> (https://robwu.nl)
-Published under a MIT license.
+Copyright (c) 2016 Rob Wu <rob@robwu.nl> (https://robwu.nl)  
+Published under a MIT license.  
 https://github.com/Rob--W/zipinfo.js
