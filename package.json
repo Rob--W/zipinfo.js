@@ -23,5 +23,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/Rob--W/zipinfo.js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Rob--W/zipinfo.js/issues"
   }
 }
