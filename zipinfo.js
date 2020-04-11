@@ -40,7 +40,7 @@ var ZipInfo = typeof module === 'object' && module.exports || {};
  *   fetch more data starting from `dataStartOffset` and call this method
  *   again. Otherwise the returned list of files may be incomplete.
  */
-ZipInfo.getEntries = function(data, dataStartOffset) {
+ZipInfo.getEntries = function(data, dataStartOffset, includeOffset) {
   var view = new DataView(data.buffer, data.byteOffset, data.length);
   var entriesLeft = 0;
   var offset = 0;
@@ -55,6 +55,27 @@ ZipInfo.getEntries = function(data, dataStartOffset) {
         break;
       }
   }
+
+  // Zip64 support: if these are set, then parse as Zip64
+  if (offset === 0xFFFFFFFF || entriesLeft === 0xFFFF) {
+    if (view.getUint32(endoffset - 20, true) !== 0x07064b50) {
+      console.error('invalid zip64 EOCD locator');
+      return;
+    }
+
+    var zip64Offset = ZipInfo.getUint64(view, endoffset - 12, true);
+
+    var viewOffset = zip64Offset - dataStartOffset;
+
+    if (view.getUint32(viewOffset, true) !== 0x06064b50) {
+      console.error('invalid zip64 EOCD record');
+      return;
+    }
+
+    entriesLeft = ZipInfo.getUint64(view, viewOffset + 32, true);
+    offset = this.getUint64(view, viewOffset + 48, true);
+  }
+
   var entries = [{
     directory: true,
     filename: '/',
@@ -79,6 +100,7 @@ ZipInfo.getEntries = function(data, dataStartOffset) {
       break;
     }
     var bitFlag = view.getUint16(offset + 8, true);
+    var compressedSize = view.getUint32(offset + 20, true);
     var uncompressedSize = view.getUint32(offset + 24, true);
     var fileNameLength = view.getUint16(offset + 28, true);
     var extraFieldLength = view.getUint16(offset + 30, true);
@@ -87,11 +109,56 @@ ZipInfo.getEntries = function(data, dataStartOffset) {
     var utfLabel = (bitFlag & 0x800) ? 'utf-8' : 'ascii';
     filename = ZipInfo._decodeFilename(filename, utfLabel);
 
+    var localEntryOffset = view.getUint32(offset + 42, true);
+
+    // ZIP64 support
+    if (compressedSize === 0xFFFFFFFF ||
+        uncompressedSize === 0xFFFFFFFF ||
+        localEntryOffset === 0xFFFFFFFF) {
+
+      var extraFieldOffset = offset + 46 + fileNameLength;
+      var efEnd = extraFieldOffset + extraFieldLength - 3;
+
+      while (extraFieldOffset < efEnd) {
+        var type = view.getUint16(extraFieldOffset, true);
+        var size = view.getUint16(extraFieldOffset + 2, true);
+        extraFieldOffset += 4;
+
+        // zip64 extra info field
+        if (type === 1) {
+          if (uncompressedSize === 0xFFFFFFFF && size >= 8) {
+            uncompressedSize = this.getUint64(view, extraFieldOffset, true);
+            extraFieldOffset += 8;
+            size -= 8;
+          }
+          if (compressedSize === 0xFFFFFFFF && size >= 8) {
+            compressedSize = this.getUint64(view, extraFieldOffset, true);
+            extraFieldOffset += 8;
+            size -= 8;
+          }
+          if (localEntryOffset === 0xFFFFFFFF && size >= 8) {
+            localEntryOffset = this.getUint64(view, extraFieldOffset, true);
+            extraFieldOffset += 8;
+            size -= 8;
+          }
+        }
+
+        extraFieldOffset += size
+      }
+    }
+
     entries.push({
       directory: filename.endsWith('/'),
       filename: filename,
       uncompressedSize: uncompressedSize,
     });
+
+    // add offset + compressedSize
+    if (includeOffset) {
+      entries[entries.length - 1].compressedSize = compressedSize;
+      entries[entries.length - 1].localEntryOffset = localEntryOffset;
+    }
+
     offset += 46 + fileNameLength + extraFieldLength + fileCommentLength;
   }
   return entries;
@@ -174,3 +241,19 @@ ZipInfo.runGetEntriesOverHttp = function(sendHttpRequest, onGotEntries) {
     },
   });
 };
+
+  // from https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DataView
+ZipInfo.getUint64 = function(dataview, byteOffset, littleEndian) {
+  // split 64-bit number into two 32-bit (4-byte) parts
+  const left =  dataview.getUint32(byteOffset, littleEndian);
+  const right = dataview.getUint32(byteOffset+4, littleEndian);
+
+  // combine the two 32-bit values
+  const combined = littleEndian? left + 2**32*right : 2**32*left + right;
+
+  if (!Number.isSafeInteger(combined))
+    console.warn(combined, 'exceeds MAX_SAFE_INTEGER. Precision may be lost');
+
+  return combined;
+}
+
