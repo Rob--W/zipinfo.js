@@ -33,5 +33,11 @@ ALLTMPFILES=('empty file with spaces' \
 ( cd "$TMPDIR" && 7z a "$OUTDIR/7z-utf8.zip" "$UTF8NAME" -mcu=on )
 ( cd "$TMPDIR" && zip "$OUTDIR/zip-utf8.zip" "$UTF8NAME" )
 
+
+dd if=/dev/zero bs=1000000 count=5000 > "$TMPDIR/more.than.FFFFFFFF"
+( cd "$TMPDIR" && zip -r -0 "$OUTDIR/zip64.zip" "more.than.FFFF" "more.than.FFFFFFFF" "100.dat")
+
 # Clean up.
 rm -f "${ALLTMPFILES[@]}" "$UTF8NAME"
+
+

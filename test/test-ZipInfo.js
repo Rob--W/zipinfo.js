@@ -13,6 +13,18 @@ function readFileAsUint8Array(filepath) {
   return new Uint8Array(nodeBuffer);
 }
 
+function readEndOfFileAsUint8Array(filepath, length) {
+  filepath = path.resolve(__dirname, filepath);
+  var size = fs.statSync(filepath).size;
+
+  var buffer = Buffer.alloc(length);
+
+  var fd = fs.openSync(filepath);
+  fs.readSync(fd, buffer, 0, length, size - length);
+
+  return {buffer: new Uint8Array(buffer), offset: size - length};
+}
+
 function assertEntriesEq(actualEntries, expectedEntries) {
   /* // Uncomment to easily generate a list of test expectations
   console.log(
@@ -129,6 +141,35 @@ describe('ZipInfo.getEntries', function() {
       uncompressedSize: 0,
     }];
     assertEntriesEq(ZipInfo.getEntries(data), expected);
+  });
+
+  it('entries for zip64 zip', function() {
+    var data = readEndOfFileAsUint8Array('testdata/zip64.zip', 0xFFFF + 23);
+    var expected = [{
+      directory: true,
+      filename: '/',
+      uncompressedSize: 0,
+      centralDirectoryStart: 5000070333
+    }, {
+      directory: false,
+      filename: 'more.than.FFFF',
+      uncompressedSize: 70000,
+      compressedSize: 70000,
+      localEntryOffset: 0
+    }, {
+      directory: false,
+      filename: 'more.than.FFFFFFFF',
+      uncompressedSize: 5000000000,
+      compressedSize: 5000000000,
+      localEntryOffset: 70072
+    }, {
+      directory: false,
+      filename: '100.dat',
+      uncompressedSize: 100,
+      compressedSize: 100,
+      localEntryOffset: 5000070168
+    }];
+    assertEntriesEq(ZipInfo.getEntries(data.buffer, data.offset, true), expected);
   });
 
   it('entries for zips with utf8 names (from zip)', function() {
